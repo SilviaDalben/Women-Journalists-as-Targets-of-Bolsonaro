@@ -1,5 +1,5 @@
 # Women Journalists as Targets of Bolsonaro:
-An Analysis of the 2022 Brazilian Presidential Election Campaign #
+## An Analysis of the 2022 Brazilian Presidential Election Campaign
 
 During the 2022 Brazilian presidential electoral campaign, Bolsonaro adopted the strategy to address sexist and misogynistic attacks on female journalists. This study aims to analyze the overall discourse and narratives that emerged from those attacks and the overall sentiment among Twitter  users.
 
