@@ -1,0 +1,191 @@
+---
+title: "FinalPaper - Women Journalists on the target of Bolsonaro - Analysis GabrielaPrioli"
+author: "Silvia DalBen Furtado"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup}
+library(tidyverse)
+library(dplyr)
+library(academictwitteR)
+library(tidytext)
+library(tokenizers)
+library(wordcloud)
+library(textdata)
+library(quanteda)
+library(stopwords)
+library(quanteda.textplots)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+library(plyr)
+library(widyr)
+```
+
+## Read RDS
+
+```{r}
+getwd()
+gabrielaprioli_tweets <- read_rds("gabrielaprioli_tweets.rds")
+```
+
+## Basic analysis
+
+```{r}
+names(gabrielaprioli_tweets) #analizing the variables I have in my dataframe
+nrow(gabrielaprioli_tweets) #analyzing how many observations I have in my dataframe
+str(gabrielaprioli_tweets$text) #analizing if text column is a character type or not
+str(gabrielaprioli_tweets$created_at) #analizing date column type
+```
+
+## Filtering and plotting the number of messages over time.
+
+```{r}
+gabrielaprioli_tweetcount <- as.data.frame(table(gabrielaprioli_tweets$created_at)) %>%
+  mutate(date = as.Date(Var1))
+
+plot <- gabrielaprioli_tweetcount %>% ggplot(aes(x=date, y=Freq)) +
+  geom_bar(stat = "identity", fill = "#1DA1F2") +
+  labs(title = "Number of tweets that mention Gabriela Prioli  | August-October 2022", x = "\ndate", y = "tweets", caption = "Source: 12-08-2022 Twitter API") +
+  scale_x_date(date_breaks = "10 days", date_labels =  "%b %d") +
+    theme_minimal()
+plot
+```
+
+
+In this chart, we can confirm that Bolsonaro's criticism about Gabriela Prioli on September 1st had an impact and the number of tweets quoting the journalist grew in the following days. 
+
+We also see a huge number of tweets with her name on October 7th. The reason for that is because on that day some netizens asked her to comment about the reduction on the education fund announced by Bolsonaro,in which she refused to talk about.
+
+She said: "Folks, I'm in New York doing my daughter's trousseau. I won't [talk about], maybe next week". She was criticized for being a spoiled upper class pregnant women, travelling to New York and not worried to discuss about public education in Brazil. 
+
+
+# NLP analysis
+
+## Selecting the variables
+
+```{r}
+#selecting the variables I want to keep for the analysis
+gabrielaprioli_tweets_clean <- gabrielaprioli_tweets %>% 
+  select(id, created_at, text)
+```
+
+## Lowercasing my data
+
+```{r}
+gabrielaprioli_tweets_clean$text <- tolower(gabrielaprioli_tweets_clean$text)
+str(gabrielaprioli_tweets_clean$text)
+```
+
+## TOKENIZING my data and cleaning STOPWORDS
+
+```{r}
+gabrielaprioli_tokens_clean <- tokens(gabrielaprioli_tweets_clean$text, 
+                 remove_punct = TRUE,
+                 remove_symbols = TRUE,
+                 remove_numbers = TRUE,
+                 remove_url = TRUE,
+                 remove_separators = TRUE) %>%
+  tokens_remove(stopwords("pt"))
+
+words_to_remove <- c("é", "gabriela", "prioli", "rt", "d", "vc", "q", "r", "ver", "ser", "vai", "pode", "ainda", "fez", "ri", "gente", "após", "sobre", "tudo", "f", "pq", "bolsonaro", "leu", "ter", "ta", "pra", "ter", "eh", "ve", "ciro", "@cirogomes", "diz", "seis", "tanto")
+custom_stopwords <- rbind(stopwords("pt"), words_to_remove)
+
+gabrielaprioli_tokens_clean <- tokens_remove(gabrielaprioli_tokens_clean, custom_stopwords)
+```
+
+## Word cloud 
+
+```{r}
+#bag of words
+gabrielaprioli_dfm <- dfm(gabrielaprioli_tokens_clean)
+topfeatures(gabrielaprioli_dfm, n = 100)
+set.seed(100)
+textplot_wordcloud(gabrielaprioli_dfm, min_count = 600, random_order = FALSE,
+                   rotation = .25)
+```
+
+In this word cloud analysis, we see that Bolsonaro was the name most cited in Gabriela's Prioli tweets. We also see that many messages included the fact that she is currently pregnant (grávida) and words like education (educação), public (pública) and rich (rica). We also can assume that the negative words cruelly (cruelmente) and threatened (ameaçada), president (presidente) and voters (eleitores) may be associated with Bolsonaro.
+
+This word cloud also highlight some twitter users we may look further like @forumpandlr, @karikrof, @andreariell, that were highly associated with Gabriela Prioli's name during the period analyzed.
+
+
+# Semantic Network Analysis
+
+## Cleaning and filtering
+
+Here I am filtering the dataset to do a Semantic Network Analysis just in the following days after Bolsonaro's attack.
+
+```{r}
+gabrielaprioli_tweets_clean2 <- filter(gabrielaprioli_tweets_clean, created_at > "2022-09-02T00:00:00.000Z")
+nrow(gabrielaprioli_tweets_clean2)
+
+gabrielaprioli_tweets_clean3 <- filter(gabrielaprioli_tweets_clean2, created_at <= "2022-09-04T23:59:00.000Z")
+nrow(gabrielaprioli_tweets_clean3)
+
+```
+
+## Bigram Network
+
+```{r}
+
+final_stop <- data.frame(word = c("é", "gabriela", "prioli", "rt", "d", "vc", "q", "r", "ver", "ser", "vai", "pode", "ainda", "fez", "ri", "gente", "após", "sobre", "tudo", "f", "pq", "que", "a", "o", "por", "de", "do", "da", "os", "eh", "https", "t.co", "em", "s", "viu", "as", "ve", "como", "tanto", "tipo", "assim", "tem", "foi", "e", "ser", "nas", "seu", "quer", "saber", "não", "marquesadvg", "se", "ele", "ela", "ao", "com", "suas", "revistaforum", "contou", "através", "essa", "dizendo", "todo", "só", "foram", "faz", "na", "parte", "sabe", "la", "blablabli", "passou", "para", "g", "uma", "às", "na", "hum", "uma"),
+                         lexicon = "custom") %>%
+  rbind(stopwords("pt")) #adds custom words to stop list
+
+gabrielaprioli_bigram <- gabrielaprioli_tweets_clean3 %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% final_stop$word) %>% #uses the combined preset and custom list
+  filter(!word2 %in% final_stop$word)
+
+gabrielaprioli_bigram_ct <- gabrielaprioli_bigram %>% dplyr::count(word1, word2, sort = TRUE)
+head(gabrielaprioli_bigram_ct, 50)
+
+```
+
+## Plotting
+
+```{r}
+
+gabrielaprioli_bigram_graph <- gabrielaprioli_bigram_ct %>%
+  filter(n > 200) %>% #removes bigrams that appear fewer than X times
+  graph_from_data_frame()
+
+gabrielaprioli_bigram_graph
+```
+
+```{r}
+ggraph(gabrielaprioli_bigram_graph, layout = "fr") + #use the fr layout algorithm
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name),
+                 repel = TRUE) + #use repel so the words do not overlap
+  theme_void() #void theme
+
+```
+
+```{r}
+
+a <- grid::arrow(type = "closed", length = unit(.2, "cm"))
+#the above row determines the lay the arrows will look
+#check out ?arrow for more information
+
+ggraph(gabrielaprioli_bigram_graph, layout = "fr") + #use the fr layout
+  geom_edge_link(aes(edge_alpha = n), #vary the edge color by n
+                 #darker lines are bigrams that occur more often
+                 arrow = a, #add the arrow information
+                 )+
+  geom_node_point(size = 2) + #makes the geom slightly larger
+  geom_node_text(aes(label = name), #adds text labels for the nodes
+                 repel = TRUE) + 
+  theme_void() #void theme
+
+```
+
+
+This Semantic Network Analysis shows us some bigrams that helps us analyzed the kind of messages were sent on Twitter associated with Gabriela Prioli's name. It is interesting to observe that the name of the other journalist attacked by Bolsonaro is here on the list (Vera Magalhães) and bigrams such as actual president (atual presidente), Bolsonaro hates women (Bolsonaro odeia mulheres), cruelly endangered (cruelmente ameaçada) and hatred decided to attack (ódio resolveram atacar).
+
+This analysis also shows twitter users included in their messages the fact that Gabriela Prioli is currently pregnant, with bigrams such as pregnant women (mulher grávida) and six months (seis meses).
+
