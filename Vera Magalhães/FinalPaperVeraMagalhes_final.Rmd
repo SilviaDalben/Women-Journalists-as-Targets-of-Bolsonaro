@@ -1,0 +1,201 @@
+---
+title: "Final Paper - Women Journalists on the target of Bolsonaro - Analysis Vera Magalhães"
+author: "Silvia DalBen Furtado"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## R Setup
+```{r setup}
+library(tidyverse)
+library(dplyr)
+library(academictwitteR)
+library(tidytext)
+library(tokenizers)
+library(wordcloud)
+library(textdata)
+library(quanteda)
+library(stopwords)
+library(quanteda.textplots)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+library(plyr)
+library(widyr)
+```
+
+## Read RDS
+
+```{r}
+getwd()
+veramagalhaes_tweets <- read_rds("veramagalhaes_tweets.rds")
+```
+
+## Basic analysis
+
+```{r}
+names(veramagalhaes_tweets)
+nrow(veramagalhaes_tweets)
+str(veramagalhaes_tweets$text) #analizing if text column is a character type or not
+str(veramagalhaes_tweets$created_at) #analizing date column type
+```
+
+# tweet count analysis
+
+## Filtering and plotting the number of messages over time
+
+```{r}
+veramagalhaes_tweetcount <- as.data.frame(table(veramagalhaes_tweets$created_at)) %>%
+  mutate(date = as.Date(Var1))
+
+plot <- veramagalhaes_tweetcount %>% ggplot(aes(x=date, y=Freq)) +
+  geom_bar(stat = "identity", fill = "#1DA1F2") +
+  labs(title = "Number of tweets that mention Vera Magalhães | August-October 2022", x = "\ndate", y = "tweets", caption = "Source: 12-07-2022 Twitter API") +
+  scale_x_date(date_breaks = "10 days", date_labels =  "%b %d") +
+    theme_minimal()
+plot
+```
+
+In this chart, we observe a peak on tweets referring to Vera Magalhães in the day after the first debate where she was attacked by Bolsonaro, and a reason for that is that the debate was streamed late at night.
+
+We also see a second peak September 14th, related to another attack Vera Magalhães suffered by a Bolsonarist deputy in another election debate for São Paulo's governor. Using a mobile phone to record the act, the parliamentarian went to Vera and called her "a shame for Brazilian journalism", reiterated the attacks made by the Chief Executive two weeks before.
+
+"I'm not afraid of men who threaten and intimidate women," wrote Vera Magalhães on Twitter, complementing that "A country that consents to this type of threat to the press is not a full democracy. Enough!" She left the debate's venue escorted by security guards and said she would repport the threat suffered to the police.
+
+This attack was seen by Bolsonaro's campaign as an issue that would not help his campaign and he became more caution on his misogyny statements targeting women journalist from this day until the end of the election.
+
+The third peak on October 17th coincides with another election debate, now for the second round, streamed by the same TV channel in which Bolsonaro attacked Vera in the first round. All the audience were waiting Vera's question to Bolsonaro and how he would react. Vera asked about Bolsonaro's project to change the composition of the supreme court, and he ironically started his answer saying: “Dear journalist Vera, I am glad to see you again”.
+
+
+# NLP analysis
+
+## Selecting the variables
+
+> I need here to reduce the timeframe and focus on the days close to the attack
+
+```{r}
+#selecting the variables I want to keep for the analysis
+veramagalhaes_tweets_clean <- veramagalhaes_tweets %>% 
+  select(id, created_at, text)
+```
+
+## Lowercasing my data
+
+```{r}
+veramagalhaes_tweets_clean$text <- tolower(veramagalhaes_tweets_clean$text)
+str(veramagalhaes_tweets_clean$text)
+```
+
+## TOKENIZING my data and cleaning STOPWORDS
+
+```{r}
+veramagalhaes_tokens_clean <- tokens(veramagalhaes_tweets_clean$text, 
+                 remove_punct = TRUE,
+                 remove_symbols = TRUE,
+                 remove_numbers = TRUE,
+                 remove_url = TRUE,
+                 remove_separators = TRUE) %>%
+  tokens_remove(stopwords("pt"))
+
+words_to_remove <- c("é", "vera", "magalhães", "magalhaes", "rt", "d", "vc", "q", "r", "ver", "ser", "vai", "pode", "ainda", "fez", "ri", "gente", "após", "sobre", "tudo", "f", "pq", "□□□□", "bolsonaro", "acha", "pra", "diz", "lula", "ciro", "simone", "tebet")
+custom_stopwords <- rbind(stopwords("pt"), words_to_remove)
+
+veramagalhaes_tokens_clean <- tokens_remove(veramagalhaes_tokens_clean, custom_stopwords)
+```
+
+## Word cloud 
+
+```{r}
+#bag of words
+veramagalhaes_dfm <- dfm(veramagalhaes_tokens_clean)
+topfeatures(veramagalhaes_dfm, n = 100)
+set.seed(100)
+textplot_wordcloud(veramagalhaes_dfm, min_count = 9000, random_order = FALSE,
+                   rotation = .25)
+```
+
+This word cloud shows that Bolsonaro was the word most cited on the tweets referring to the journalist Vera Magalhães during the election. We also see the names of the other candidates in a lower size, such as Lula, Simone Tebet and Ciro Gomes.
+
+The hashtag #debatenaband in this chart refers to the first debate streamed by the TV channel Bandeirantes. We also see negative words such as attack (atacar, ataque), aggression (agressão), and shame (vergonha), a word directly linked to what Bolsonaro said to Vera: "you are a shame for Brazilian journalism". The world solidarity (solidariedade) and women (mulheres) also shows many of those tweets were supporting Vera and rejecting Bolsonaro.
+
+Twitter profiles highlighted in this word cloud: @bernardokuster2, @realpfigueiredo, @douglasgarcia (Bolsonarist deputy who attacked Vera in another debate), @kimpain, @viniciucfp82.
+
+
+# Semantic Network Analysis
+
+## Cleaning and filtering
+
+Here I am filtering the dataset to do a Semantic Network Analysis just in the following days after Bolsonaro's attack.
+
+```{r}
+
+veramagalhaes_tweets_clean2 <- filter(veramagalhaes_tweets_clean, created_at > "2022-08-29T00:00:00.000Z")
+nrow(veramagalhaes_tweets_clean2)
+
+veramagalhaes_tweets_clean3 <- filter(veramagalhaes_tweets_clean2, created_at <= "2022-08-30T23:59:00.000Z")
+nrow(veramagalhaes_tweets_clean3)
+
+```
+
+## Bigram Network
+
+```{r}
+
+final_stop <- data.frame(word = c("é", "rt", "d", "vc", "q", "r", "ver", "ser", "vai", "pode", "ainda", "fez", "ri", "gente", "após", "sobre", "tudo", "f", "pq", "que", "a", "o", "por", "de", "do", "da", "os", "eh", "https", "t.co", "em", "s", "viu", "as", "ve", "como", "tanto", "tipo", "assim", "tem", "foi", "e", "ser", "nas", "seu", "quer", "saber", "não", "se", "ele", "ela", "ao", "com", "suas", "revistaforum", "contou", "através", "essa", "dizendo", "todo", "só", "foram", "faz", "na", "parte", "sabe", "la", "passou", "para", "g", "uma", "às", "na", "hum", "uma", "no", "à", "p", "sua", "está", "tendo", "seus", "porque", "pra", "jovem", "pan", "vera", "magalhaes", "você", "mim", "ess", "eu", "deve", "magal", "um", "pelo", "das", "mas"),
+                         lexicon = "custom") %>%
+  rbind(stopwords("pt")) #adds custom words to stop list
+
+veramagalhaes_bigram <- veramagalhaes_tweets_clean3 %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  filter(!word1 %in% final_stop$word) %>% #uses the combined preset and custom list
+  filter(!word2 %in% final_stop$word)
+
+veramagalhaes_bigram_ct <- veramagalhaes_bigram %>% dplyr::count(word1, word2, sort = TRUE)
+head(veramagalhaes_bigram_ct, 50)
+
+```
+
+## Plotting
+
+```{r}
+veramagalhaes_bigram_graph <- veramagalhaes_bigram_ct %>%
+  filter(n > 2000) %>% #removes bigrams that appear fewer than X times
+  graph_from_data_frame()
+
+veramagalhaes_bigram_graph
+```
+
+```{r}
+ggraph(veramagalhaes_bigram_graph, layout = "fr") + #use the fr layout algorithm
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name),
+                 repel = TRUE) + #use repel so the words do not overlap
+  theme_void() #void theme
+```
+
+```{r}
+a <- grid::arrow(type = "closed", length = unit(.2, "cm"))
+#the above row determines the lay the arrows will look
+#check out ?arrow for more information
+
+ggraph(veramagalhaes_bigram_graph, layout = "fr") + #use the fr layout
+  geom_edge_link(aes(edge_alpha = n), #vary the edge color by n
+                 #darker lines are bigrams that occur more often
+                 arrow = a, #add the arrow information
+                 )+
+  geom_node_point(size = 2) + #makes the geom slightly larger
+  geom_node_text(aes(label = name), #adds text labels for the nodes
+                 repel = TRUE) + 
+  theme_void() #void theme
+```
+
+In this Semantic Network analysis, we see the expression brazilian women reject Bolsonaro (mulheres brasileiras rejeitam Bolsonaro),  my solidarity to journalists (minha solidariedade aos jornalistas), we will never forget (nunca esqueceremos) as two strong bigrams supporting Vera Magalhães.
+
+We also see the bigram Bolsonaro attack (Bolsonaro ataca), direct attack (ataque direto), easy to defend (fácil defender), bad professionals (maus profissionais), are bad evaluated (são mal vistos), terrible example (péssimo exemplo) that are directly related to the first debate in which Bolsonaro attacked Vera.
+
+The bigrams ex prisioner (ex presidiário) refers to the other candidate Lula and is usually used by Bolsonaro's supporters. We also have the other bygram Lula is back (Lula voltou), which is related to Lula's supporters.
+
+The bigram god + verashameofjour (deus and veravergonhadojo) shows also how religion and god were one of the political flags of Bolsonaro's supporters.
+
